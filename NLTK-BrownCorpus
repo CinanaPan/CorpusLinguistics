@@ -1,0 +1,95 @@
+import spacy
+import matplotlib.pyplot as plt
+from nltk.corpus import brown
+
+# 尝试加载默认模型
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    print("Failed to load the model. Please specify the correct model path.")
+
+# 获取布朗语料库
+brown.categories()
+
+# 定义性别中性代词
+gender_neutral_pronouns = {"it", "its", "itself", "they", "them", "their", "theirs", "themselves"}
+
+def is_person_noun(token):
+    # 使用依存关系判断名词是否指代人
+    return token.dep_ == "nsubj" or token.dep_ == "attr" or token.dep_ == "dobj"  # 根据需要调整依存关系类型
+
+def analyze_gender_pronouns(category):
+    neutral_count = 0
+    male_count = 0
+    female_count = 0
+
+    # 分析每个布朗语料库的文本
+    for fileid in brown.fileids(category):
+        text = brown.raw(fileid)
+        
+        # 使用SpaCy进行性别代词分析
+        doc = nlp(text)
+        for token in doc:
+            if token.text.lower() in gender_neutral_pronouns:
+                # 判断代词是否与指代人的名词搭配
+                if token.head and is_person_noun(token.head):
+                    neutral_count += 1
+            elif token.text.lower() in {"he", "him", "his", "himself"}:
+                male_count += 1
+            elif token.text.lower() in {"she", "her", "hers", "herself"}:
+                female_count += 1
+
+    # 计算百分比
+    total_count = neutral_count + male_count + female_count
+    neutral_percentage = (neutral_count / total_count) * 100 if total_count > 0 else 0
+    male_percentage = (male_count / total_count) * 100 if total_count > 0 else 0
+    female_percentage = (female_count / total_count) * 100 if total_count > 0 else 0
+
+    return {
+        "category": category,
+        "neutral_count": neutral_count,
+        "male_count": male_count,
+        "female_count": female_count,
+        "neutral_percentage": neutral_percentage,
+        "male_percentage": male_percentage,
+        "female_percentage": female_percentage,
+        "total_count": total_count
+    }
+
+def plot_gender_distribution(categories_data):
+    labels = [data["category"] for data in categories_data]
+    colors = ["gray", "blue", "pink"]
+
+    neutral_percentages = [data["neutral_percentage"] for data in categories_data]
+    male_percentages = [data["male_percentage"] for data in categories_data]
+    female_percentages = [data["female_percentage"] for data in categories_data]
+
+    fig, ax = plt.subplots()
+
+    ax.bar(labels, male_percentages, color=colors[1], label="Male", edgecolor='black', linewidth=1)
+    ax.bar(labels, female_percentages, bottom=male_percentages, color=colors[2], label="Female", edgecolor='black', linewidth=1)
+    ax.bar(labels, neutral_percentages, bottom=[sum(x) for x in zip(male_percentages, female_percentages)], color=colors[0], label="Gender Neutral", edgecolor='black', linewidth=1)
+
+    for i, data in enumerate(categories_data):
+        ax.text(i, male_percentages[i]/2, f"{data['male_count']} ({data['male_percentage']:.2f}%)", ha='center', va='center', color='black', fontsize=8)
+        ax.text(i, male_percentages[i] + female_percentages[i]/2, f"{data['female_count']} ({data['female_percentage']:.2f}%)", ha='center', va='center', color='black', fontsize=8)
+        ax.text(i, sum([male_percentages[i], female_percentages[i]]) + neutral_percentages[i]/2, f"{data['neutral_count']} ({data['neutral_percentage']:.2f}%)", ha='center', va='center', color='black', fontsize=8)
+
+    ax.set_ylabel("Percentage")
+    ax.set_title("Gender Pronoun Distribution in Brown Corpus")
+    ax.legend()
+
+    plt.show()
+
+# 分析十个类别
+categories_data = []
+for category in ['government', 'hobbies', 'humor', 'learned', 'lore', 'mystery', 'news', 'religion', 'reviews', 'romance', 'science_fiction']:
+    data = analyze_gender_pronouns(category)
+    categories_data.append(data)
+    print(f"\n{category} Pronoun Counts and Percentages:")
+    print(f"Male Count: {data['male_count']}, Male Percentage: {data['male_percentage']:.2f}%")
+    print(f"Female Count: {data['female_count']}, Female Percentage: {data['female_percentage']:.2f}%")
+    print(f"Neutral Count: {data['neutral_count']}, Neutral Percentage: {data['neutral_percentage']:.2f}%")
+
+# 生成柱状图
+plot_gender_distribution(categories_data)
